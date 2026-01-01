@@ -1,0 +1,201 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+  output        = "../src/generated/client"
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  ACQUISITION_MANAGER
+  VIRTUAL_ASSISTANT
+  AUDITOR
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  NURTURE
+  OFFER_MADE
+  UNDER_CONTRACT
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum LeadSource {
+  DIRECT
+  ZILLOW
+  FACEBOOK
+  GOOGLE
+  MANUAL
+  OTHER
+}
+
+enum InteractionChannel {
+  EMAIL
+  SMS
+  PHONE
+  SOCIAL
+}
+
+enum InteractionDirection {
+  INBOUND
+  OUTBOUND
+}
+
+model User {
+  id          String     @id @default(uuid())
+  email       String     @unique
+  password    String
+  name        String?
+  role        UserRole   @default(ACQUISITION_MANAGER)
+  status      String     @default("ACTIVE")
+  lastLoginAt DateTime?
+  leads       Lead[]     @relation("LeadOwner")
+  auditLogs   AuditLog[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Lead {
+  id           String                @id @default(uuid())
+  source       LeadSource            @default(DIRECT)
+  name         String
+  email        String?
+  phone        String?
+  address      String
+  city         String
+  state        String
+  zip          String
+  score        Int                   @default(0)
+  status       LeadStatus            @default(NEW)
+  ownerId      String?
+  owner        User?                 @relation("LeadOwner", fields: [ownerId], references: [id])
+  property     Property?
+  interactions Interaction[]
+  aiInsights   AiInsight[]
+  executions   AutomationExecution[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
+model Property {
+  id               String          @id @default(uuid())
+  leadId           String          @unique
+  lead             Lead            @relation(fields: [leadId], references: [id])
+  address          String? // renamed from fullAddress
+  lat              Float?
+  lng              Float?
+  bed              Int?
+  bath             Float?
+  sqft             Int?
+  estimatedValue   Float?
+  lastSaleDate     DateTime?
+  lastSalePrice    Float?
+  taxAssessedValue Float?
+  distressEvents   DistressEvent[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model DistressEvent {
+  id           String   @id @default(uuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id])
+  type         String // e.g., "PROBATE", "PRE_FORECLOSURE"
+  source       String
+  recordedDate DateTime
+  details      Json?
+  createdAt    DateTime @default(now())
+}
+
+model Interaction {
+  id        String               @id @default(uuid())
+  leadId    String
+  lead      Lead                 @relation(fields: [leadId], references: [id])
+  channel   InteractionChannel
+  direction InteractionDirection
+  content   String
+  status    String               @default("SENT")
+  sentAt    DateTime             @default(now())
+  metadata  Json?
+}
+
+model AiInsight {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  summary      String   @db.Text
+  sentiment    String // POSITIVE, NEUTRAL, NEGATIVE
+  keyTakeaways Json // Array of strings
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AutomationWorkflow {
+  id          String                @id @default(uuid())
+  name        String
+  triggerType String // e.g., "NEW_LEAD", "STATUS_CHANGE"
+  config      Json
+  isActive    Boolean               @default(true)
+  steps       AutomationStep[]
+  executions  AutomationExecution[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model AutomationStep {
+  id         String                 @id @default(uuid())
+  workflowId String
+  workflow   AutomationWorkflow     @relation(fields: [workflowId], references: [id])
+  stepType   String // e.g., "SEND_EMAIL", "WAIT", "ASSIGN_TASK"
+  order      Int
+  config     Json
+  results    AutomationStepResult[]
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+}
+
+model AutomationExecution {
+  id          String                 @id @default(uuid())
+  workflowId  String
+  workflow    AutomationWorkflow     @relation(fields: [workflowId], references: [id])
+  leadId      String
+  lead        Lead                   @relation(fields: [leadId], references: [id])
+  status      String                 @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED
+  results     AutomationStepResult[]
+  startedAt   DateTime               @default(now())
+  completedAt DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+}
+
+model AutomationStepResult {
+  id          String              @id @default(uuid())
+  executionId String
+  execution   AutomationExecution @relation(fields: [executionId], references: [id])
+  stepId      String
+  step        AutomationStep      @relation(fields: [stepId], references: [id])
+  status      String // COMPLETED, FAILED
+  output      Json?
+  error       String?
+  startedAt   DateTime            @default(now())
+  completedAt DateTime?
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  entityType String
+  entityId   String
+  action     String // e.g., "CREATE", "UPDATE", "DELETE"
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+}
