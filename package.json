@@ -4,18 +4,13 @@
     "description": "deal-pro-analyzer",
     "main": "index.js",
     "scripts": {
-        "dev": "npm run dev --prefix client",
-        "build": "npm run build --prefix client",
-        "start": "npm run start --prefix client",
-        "dev:all": "concurrently \"npm run dev --prefix client\" \"npm run start:dev --prefix server\"",
-        "install:all": "npm install --prefix client && npm install --prefix server"
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start"
     },
     "dependencies": {
         "next": "^16.1.1",
         "react": "^19.2.3",
         "react-dom": "^19.2.3"
-    },
-    "devDependencies": {
-        "concurrently": "^8.2.2"
     }
 }
